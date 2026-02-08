@@ -1,0 +1,39 @@
+<!-- 
+Project:   Fishing Stock Mapping
+File:      index.html 
+Author:    Maxximillion Thomas
+Purpose:   Create a web-based GIS explorer for mapping Ontario fishing stock events over the past decade.
+Date:      February 8, 2026
+ -->
+
+<!-- Meta Data -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Fishing Stock Mapping</title>
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
+    <link rel="stylesheet" href="css/styles.css">
+
+    <!-- JavaScript -->
+    <script src="https://js.arcgis.com/4.28/" defer></script>
+    <script src="js/main.js" defer></script>
+</head>
+
+<!-- Body -->
+<body>
+    <!-- Information header -->
+    <div class="header">
+        <h1>Ontario Fishing Stock Mapping</h1>
+        <h2>Data mapping for Ontario fishing stock events over the past decade.</h2>
+        <p><em>Data from Ontario GeoHub</em></p>
+    </div>
+
+    <!-- Data population -->
+    <div id="viewDiv"></div>
+</body>
+</html>
