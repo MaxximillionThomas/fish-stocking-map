@@ -112,4 +112,24 @@ require([
 
     // Add the search widget to the top-right corner of the view
     view.ui.add(searchWidget, "top-right");
+
+    // ===========  Data-point click handling  ===========
+    // Smoothly zoom to the clicked point on the map
+    view.on("click", (event) => {
+        view.hitTest(event).then((response) => {
+            // Find if we clicked a point on our layer
+            const dataPointClicked = response.results.find(res => res.graphic.layer === ontarioLayer);
+
+            if (dataPointClicked) {
+                view.goTo({
+                    target: [dataPointClicked.graphic.geometry.longitude, dataPointClicked.graphic.geometry.latitude + 0.15],
+                    zoom: 10
+                }, {
+                    // Smooth transition 
+                    duration: 1000, 
+                    easing: "ease-in-out"
+                });
+            }
+        });
+    });
 });
