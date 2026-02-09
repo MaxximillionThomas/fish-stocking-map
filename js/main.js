@@ -1,4 +1,6 @@
+
 require([
+    // ===========  Library imports  ===========
     // No local esri folder needed as the arcgis js reference in Index.html points to the online version of the API, which includes all necessary modules
     "esri/config",
     "esri/Map",
@@ -8,21 +10,22 @@ require([
     "esri/widgets/Search"
 ], function (esriConfig, Map, MapView, GeoJSONLayer, BasemapToggle, Search) {
 
+    // ===========  Map setup  ===========
     // Set the API Key - required for generating the basemap 
     esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurHEe6Qt8vQLTcMOHhjjUcOai4zRm52zpqbe_N_Io0KCJpuysuvoS_olnWjiW179mACDnb9rx4YE52xtm9XyFT8EL0zO0CcS2Q8ThSeRVdiIn77HCPTkhBeuDLoWu4WVnMUNn_gSLqsdv5F4YaT027kncyF7J9ghq1MfHhr5dhuJmGDYh1AfR7l2GqbgV6VnG9wmXrUnmBRnOdzDvDR5FRXE.AT1_z8jiy4ia";
 
     // Initialize the map with a standard oceanic basemap
     const map = new Map({
-        basemap: "arcgis-hillshade-dark"
+        basemap: "arcgis-imagery-standard"
     });
 
     // Load the map into view
     const view = new MapView({
         container: "viewDiv",
         map: map,
-        // Centered on Ontario
-        center: [-84.5, 48.5], 
-        zoom: 5
+        // Centered on Lake Simcoe
+        center: [-79.37, 44.42], 
+        zoom: 10
     });
 
     // Create the Ontario GeoHub layer - required for retrieving data from the Ontario GeoHub dataset
@@ -40,7 +43,7 @@ require([
                     <li><strong>Township:</strong> {Geographic_Township}</li>
                 </ul>
 
-                <p><i>Data provided by the Ministry of Natural Resources and Forestry.</i></p>
+                <p><i>Data provided by the Ministry of Natural Resources and Forestry through Ontario GeoHub.</i></p>
             `
         }
     });
@@ -48,7 +51,65 @@ require([
     // Add the layer to the map
     map.add(ontarioLayer);
 
-    // Add widgets for user interaction
-    view.ui.add(new Search({ view: view }), "top-right");
-    view.ui.add(new BasemapToggle({ view: view, nextBasemap: "arcgis-hillshade-light" }), "bottom-right");
+    // ===========  Search widget  ===========
+    const searchWidget = new Search({
+        view: view,
+        allPlaceholder: "Search waterbodies or species",
+        includeDefaultSources: false,
+        sources: [{
+            name: "Ontario Fishing Holes",
+            placeholder: "Ex: Simcoe",
+
+            // Handle the list 'contains' population based on the user's input
+            getSuggestions: (params) => {
+                return ontarioLayer.queryFeatures().then((results) => {
+                    // Create a 'search pattern' from what the user typed
+                    const pattern = new RegExp(params.suggestTerm, "i"); 
+                    
+                    return results.features
+                        .filter(f => {
+                            const name = f.attributes.Official_Waterbody_Name;
+                            const species = f.attributes.Species;
+                            // Return true if the pattern exists ANYWHERE in name or species
+                            return pattern.test(name) || pattern.test(species);
+                        })
+                        .map(f => ({
+                            key: "name",
+                            text: `${f.attributes.Official_Waterbody_Name} (${f.attributes.Species})`,
+                            sourceIndex: params.sourceIndex
+                        }));
+                });
+            },
+
+            // Handle the map navigation when a list item is clicked
+            getResults: (params) => {
+                const lakeName = params.suggestResult.text.split(" (")[0];
+                return ontarioLayer.queryFeatures({
+                    where: `Official_Waterbody_Name = '${lakeName}'`,
+                    returnGeometry: true,
+                    outFields: ["*"]
+                }).then(results => {
+                    return results.features.map(f => ({ 
+                        feature: f, 
+                        name: f.attributes.Official_Waterbody_Name 
+                    }));
+                });
+            }
+        }]
+    });
+
+    // Use this listener to handle the bottom-center focus
+    searchWidget.on("select-result", (event) => {
+        const geom = event.result.feature.geometry;
+        view.goTo({
+            target: [geom.longitude, geom.latitude + 0.15],
+            zoom: 10
+        }, {
+            duration: 1000,
+            easing: "ease-in-out"
+        });
+    });
+
+    // Add the search widget to the top-right corner of the view
+    view.ui.add(searchWidget, "top-right");
 });
