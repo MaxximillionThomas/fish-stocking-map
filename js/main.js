@@ -7,8 +7,9 @@ require([
     "esri/views/MapView",
     "esri/layers/GeoJSONLayer",
     "esri/widgets/BasemapToggle",
-    "esri/widgets/Search"
-], function (esriConfig, Map, MapView, GeoJSONLayer, BasemapToggle, Search) {
+    "esri/widgets/Search",
+    "esri/layers/FeatureLayer"
+], function (esriConfig, Map, MapView, GeoJSONLayer, BasemapToggle, Search, FeatureLayer) {
 
     // ===========  Map setup  ===========
     // Set the API Key - required for generating the basemap 
@@ -28,6 +29,40 @@ require([
         zoom: 10
     });
 
+    // ===========  Boundary lines  ===========
+    // Handle cross-domain authentication betweeen the Esri API and the LIO boundary layer - LIO requests won't include any unnecessary tokens or credentials
+    esriConfig.request.interceptors.push({
+        urls: "https://ws.lioservices.lrc.gov.on.ca/",
+        before: function(params) {
+            params.requestOptions.query = params.requestOptions.query || {};
+            params.requestOptions.query.token = null; // Keeps the LIO request clean
+        }
+    });
+
+    // Add geographic boundary lines to identify Townships 
+    const boundaryLayer = new FeatureLayer({
+        url: "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/LIO_OPEN_DATA/LIO_Open06/MapServer/1",
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "simple-fill",
+                // Transparent fill - only the borders will be visible
+                color: [0, 0, 0, 0], 
+                outline: {
+                    // Light gray border
+                    color: [200, 200, 200, 0.4], 
+                    width: 0.5
+                }
+            }
+        },
+        popupEnabled: false,
+        listMode: "hide"
+    });
+
+    // Add the boundary lines to the map
+    map.add(boundaryLayer);
+
+    // ===========  Stock event data  ===========
     // Create the Ontario GeoHub layer - required for retrieving data from the Ontario GeoHub dataset
     const ontarioLayer = new GeoJSONLayer({
         // Local path to the GeoJSON file
@@ -48,7 +83,7 @@ require([
         }
     });
 
-    // Add the layer to the map
+    // Add the data points to the map
     map.add(ontarioLayer);
 
     // ===========  Search widget  ===========
