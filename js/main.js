@@ -8,8 +8,9 @@ require([
     "esri/layers/GeoJSONLayer",
     "esri/widgets/BasemapToggle",
     "esri/widgets/Search",
-    "esri/layers/FeatureLayer"
-], function (esriConfig, Map, MapView, GeoJSONLayer, BasemapToggle, Search, FeatureLayer) {
+    "esri/layers/FeatureLayer",
+    "esri/core/reactiveUtils"
+], function (esriConfig, Map, MapView, GeoJSONLayer, BasemapToggle, Search, FeatureLayer, reactiveUtils) {
 
     // ===========  Map setup  ===========
     // Set the API Key - required for generating the basemap 
@@ -67,6 +68,32 @@ require([
     const ontarioLayer = new GeoJSONLayer({
         // Local path to the GeoJSON file
         url: "./data/fish-stock-events.geojson", 
+
+        // Initial state - starts off at zoom 10 with individual points visible
+        featureReduction: null, 
+
+        // Define how data points should look when clusters are NOT enabled (Zoom 10+)
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "simple-marker",
+                size: 8,
+                // Zoom 10+: show individual points in blue
+                color: "blue", 
+                outline: { color: "white", width: 1 }
+            },
+            visualVariables: [{
+                type: "color",
+                field: "cluster_count",
+                stops: [
+                    // Zoom 0-0: hide individual points and show clusters in green
+                    { value: 1, color: [0, 0, 0, 0] }, 
+                    { value: 2, color: "green" }       
+                ]
+            }]
+        },
+
+        // Information popups that appear when clicking on a data point
         popupTemplate: {
             title: "Location: {Official_Waterbody_Name}", 
             content: 
@@ -82,6 +109,79 @@ require([
             `
         }
     });
+
+    // Define how data clusters should look and behave when enabled (Zoom 0-9)
+    const clusterConfig = {
+        type: "cluster",
+        clusterRadius: "100px",
+        clusterMinSize: "24px",
+        clusterMaxSize: "60px",
+        labelingInfo: [{
+            labelExpressionInfo: { 
+                // Only show the number if it's a sum of 2 or more
+                expression: "IIf($feature.cluster_count > 1, $feature.cluster_count, '')" 
+            },
+            symbol: {
+                type: "text",
+                color: "white",
+                font: { weight: "bold", size: "12px" }
+            },
+            labelPlacement: "center-center"
+        }]
+    };
+
+    // ===========  Data-point click handling  ===========
+    // 1. Set the viewing mode (clustered/invididual) based on zoom level 
+    reactiveUtils.watch(
+        () => view.zoom,
+        (zoom) => {
+            // Zoom 9 or below (further out): show green llusters
+            if (zoom <= 9) {
+                ontarioLayer.featureReduction = clusterConfig;
+            // Zoom 10 or higher (closer in): show individual blue Points
+            } else {
+                ontarioLayer.featureReduction = null;
+            }
+        },
+        { initial: true }
+    );
+
+    // 2. Zoom in when clicking on a cluster or data point
+    // Click event: triggered when the user clicks anywhere on the map
+    view.on("click", (event) => {
+        // Hit test event: identifies which graphics were clicked on, returning details about them in the *response*
+        view.hitTest(event).then((response) => {
+
+            // If we click a GREEN CLUSTER (Aggregate)
+            const cluster = response.results.find(res => res.graphic && res.graphic.isAggregate);
+            if (cluster) {
+                view.goTo({
+                    // Zoom in 1 level (e.g., from 8 to 9) towards the cluster's center point
+                    target: cluster.graphic.geometry,
+                    zoom: view.zoom + 1 
+                });
+                return;
+            }
+
+            // If we click a BLUE DATA POINT
+            const dataPoint = response.results.find(res => res.graphic.layer === ontarioLayer);
+            if (dataPoint) {
+                view.goTo({
+                    // Zoom to level 10 and center slightly above the point for better visibility of the popup
+                    target: [dataPoint.graphic.geometry.longitude, dataPoint.graphic.geometry.latitude + 0.15],
+                    zoom: 10 
+                }, {
+                    // Smoothly zoom to the data point    
+                    duration: 1000,
+                    easing: "ease-in-out"
+                });
+            }
+        });
+    });
+
+    // =========================================================
+    // ==============  END ADDITIONAL CONFIG  ==================
+    // =========================================================
 
     // Add the data points to the map
     map.add(ontarioLayer);
@@ -147,24 +247,4 @@ require([
 
     // Add the search widget to the top-right corner of the view
     view.ui.add(searchWidget, "top-right");
-
-    // ===========  Data-point click handling  ===========
-    // Smoothly zoom to the clicked point on the map
-    view.on("click", (event) => {
-        view.hitTest(event).then((response) => {
-            // Find if we clicked a point on our layer
-            const dataPointClicked = response.results.find(res => res.graphic.layer === ontarioLayer);
-
-            if (dataPointClicked) {
-                view.goTo({
-                    target: [dataPointClicked.graphic.geometry.longitude, dataPointClicked.graphic.geometry.latitude + 0.15],
-                    zoom: 10
-                }, {
-                    // Smooth transition 
-                    duration: 1000, 
-                    easing: "ease-in-out"
-                });
-            }
-        });
-    });
 });
