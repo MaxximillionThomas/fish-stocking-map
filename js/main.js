@@ -241,6 +241,9 @@ require([
                 return ontarioLayer.queryFeatures().then((results) => {
                     // Create a 'search pattern' from what the user typed
                     const pattern = new RegExp(params.suggestTerm, "i"); 
+
+                    // Use a Set to track unique waterbody names and avoid duplicates in the suggestions list   
+                    const uniqueNames = new Set();
                     
                     return results.features
                         .filter(f => {
@@ -248,9 +251,18 @@ require([
                             const township = f.attributes.Geographic_Township;
                             const name = f.attributes.Official_Waterbody_Name;
                             const species = f.attributes.Species;
-                            // Return true if the pattern exists ANYWHERE in name or species
-                            return  pattern.test(township) || pattern.test(name) || pattern.test(species);
+                            
+                            // Return true if the pattern exists ANYWHERE in township, name or species (skipping duplicates); else return false
+                            const patternMatches = pattern.test(township) || pattern.test(name) || pattern.test(species);
+                            if (patternMatches && !uniqueNames.has(name)) {
+                                uniqueNames.add(name);
+                                return true;
+                            } else {
+                                return false;
+                            }
                         })
+
+                        // Customize the suggestion text to show both the waterbody name and fish species for the data point (e.g., "Lake Simcoe (Rainbow Trout)")
                         .map(f => ({
                             key: "name",
                             text: `${f.attributes.Official_Waterbody_Name} (${f.attributes.Species})`,
