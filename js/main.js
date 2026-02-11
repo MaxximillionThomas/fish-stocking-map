@@ -1,6 +1,13 @@
+/* 
+Project:   Fishing Stock Mapping
+File:      main.js
+Author:    Maxximillion Thomas
+Purpose:   A data-driven GIS application for mapping fish restocking events across Ontario's waterbodies.
+Date:      February 11, 2026
+*/
 
 require([
-    // ===========  Library imports  ===========
+    // ===========  Library module imports  ===========
     // No local esri folder needed as the arcgis js reference in Index.html points to the online version of the API, which includes all necessary modules
     "esri/config",
     "esri/Map",
@@ -16,7 +23,7 @@ require([
     // Set the API Key - required for generating the basemap 
     esriConfig.apiKey = "AAPTxy8BH1VEsoebNVZXo8HurHEe6Qt8vQLTcMOHhjjUcOai4zRm52zpqbe_N_Io0KCJpuysuvoS_olnWjiW179mACDnb9rx4YE52xtm9XyFT8EL0zO0CcS2Q8ThSeRVdiIn77HCPTkhBeuDLoWu4WVnMUNn_gSLqsdv5F4YaT027kncyF7J9ghq1MfHhr5dhuJmGDYh1AfR7l2GqbgV6VnG9wmXrUnmBRnOdzDvDR5FRXE.AT1_z8jiy4ia";
 
-    // Initialize the map with a standard oceanic basemap
+    // Initialize the map with a standard basemap
     const map = new Map({
         basemap: "arcgis-imagery-standard"
     });
@@ -36,7 +43,7 @@ require([
         urls: "https://ws.lioservices.lrc.gov.on.ca/",
         before: function(params) {
             params.requestOptions.query = params.requestOptions.query || {};
-            params.requestOptions.query.token = null; // Keeps the LIO request clean
+            params.requestOptions.query.token = null;
         }
     });
 
@@ -69,16 +76,29 @@ require([
         // Local path to the GeoJSON file
         url: "./data/fish-stock-events.geojson", 
 
-        // Initial state - starts off at zoom 10 with individual points visible
+        /* 
+        Important: 
+
+        A datapoint points to a specific waterbody. 
+            A waterbody may hold data for one or MORE stocking events over the last decade
+            (e.g., 1000 rainbow trout stocked in Lake Simcoe in 2015, 500 brown trout stocked in Lake Simcoe in 2018).
+
+        A cluster is a single point that represents multiple data points.
+            Clusters show the aggregate of stocking events in a given area (e.g., "54"), combining year-to-year counts from multiple waterbodies in close proximity.
+
+        This improves performance and reduces visual clutter at wider zoom levels.
+        */
+
+        // Initial state - starts off at zoom 10 with cluster points visible
         featureReduction: null, 
 
-        // Define how data points should look when clusters are NOT enabled (Zoom 10+)
+        // Define how data points should look when clusters are NOT enabled (Zoom 12+)
         renderer: {
             type: "simple",
             symbol: {
                 type: "simple-marker",
                 size: 10,
-                // Zoom 10+: show individual points in blue
+                // Zoom 12+: show individual points in blue
                 color: [34, 139, 34, 1], 
                 outline: { color: "white", width: 1.2 }
             },
@@ -86,14 +106,14 @@ require([
                 type: "color",
                 field: "cluster_count",
                 stops: [
-                    // Zoom 0-0: hide individual points and show clusters in green
+                    // Zoom 0-11: hide individual points and show clusters in green
                     { value: 1, color: [0, 0, 0, 0] }, 
                     { value: 2, color: "green" }       
                 ]
             }]
         },
 
-        // Information popups that appear when clicking on a data point
+        // Information popups that appear when clicking on an individual data point
         popupTemplate: {
             title: "Location: {Official_Waterbody_Name}", 
             content: 
@@ -110,12 +130,12 @@ require([
         }
     });
 
-    // Define how data clusters should look and behave when enabled (Zoom 0-9)
+    // Define how data clusters should look and behave when enabled (Zoom 0-11)
     const clusterConfig = {
         type: "cluster",
         clusterRadius: "100px",
      
-        // Size and color clusters based on the number of points they contain
+        // Size and color clusters based on the number of stocking events they represent
         renderer: {
             type: "simple",
             symbol: {
@@ -129,7 +149,7 @@ require([
                     type: "size",
                     field: "cluster_count",
                     // This logic keeps small groups at your original size 
-                    // Value corresponds to the number of data points in the cluster
+                    // Value corresponds to the number of stocking events in the cluster
                     stops: [
                         { value: 2, size: "20px" },   
                         { value: 10, size: "30px" }, 
@@ -176,10 +196,10 @@ require([
     reactiveUtils.watch(
         () => view.zoom,
         (zoom) => {
-            // Zoom 11 or below (further out): show green llusters
+            // Zoom 11 or below (further out): show green clusters
             if (zoom <= 11) {
                 ontarioLayer.featureReduction = clusterConfig;
-            // Zoom 12 or higher (closer in): show individual blue Points
+            // Zoom 12 or higher (closer in): show blue individual points
             } else {
                 ontarioLayer.featureReduction = null;
             }
@@ -208,7 +228,7 @@ require([
             const dataPoint = response.results.find(res => res.graphic.layer === ontarioLayer);
             if (dataPoint) {
                 view.goTo({
-                    // Zoom to level 10 and center slightly above the point for better visibility of the popup
+                    // Zoom to level 12 and center slightly above the point for better visibility of the popup
                     target: [dataPoint.graphic.geometry.longitude, dataPoint.graphic.geometry.latitude + 0.05],
                     zoom: 12 
                 }, {
@@ -220,18 +240,14 @@ require([
         });
     });
 
-    // =========================================================
-    // ==============  END ADDITIONAL CONFIG  ==================
-    // =========================================================
-
     // Add the data points to the map
     map.add(ontarioLayer);
 
     // ===========  Search widget  ===========
     const searchWidget = new Search({
         view: view,
-        allPlaceholder: "Search waterbodies or species",
         includeDefaultSources: false,
+        locationEnabled: false,
         sources: [{
             name: "Ontario Fishing Holes",
             placeholder: "Ex: Simcoe",
@@ -292,8 +308,8 @@ require([
     searchWidget.on("select-result", (event) => {
         const geom = event.result.feature.geometry;
         view.goTo({
-            target: [geom.longitude, geom.latitude + 0.15],
-            zoom: 10
+            target: [geom.longitude, geom.latitude + 0.05],
+            zoom: 12
         }, {
             duration: 1000,
             easing: "ease-in-out"
