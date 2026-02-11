@@ -77,10 +77,10 @@ require([
             type: "simple",
             symbol: {
                 type: "simple-marker",
-                size: 8,
+                size: 10,
                 // Zoom 10+: show individual points in blue
-                color: "blue", 
-                outline: { color: "white", width: 1 }
+                color: [34, 139, 34, 1], 
+                outline: { color: "white", width: 1.2 }
             },
             visualVariables: [{
                 type: "color",
@@ -114,8 +114,49 @@ require([
     const clusterConfig = {
         type: "cluster",
         clusterRadius: "100px",
-        clusterMinSize: "24px",
-        clusterMaxSize: "60px",
+     
+        // Size and color clusters based on the number of points they contain
+        renderer: {
+            type: "simple",
+            symbol: {
+                type: "simple-marker",
+                color: "green",
+                outline: { color: "white", width: 1 }
+            },
+            visualVariables: [
+                // Dynamic sizing
+                {
+                    type: "size",
+                    field: "cluster_count",
+                    // This logic keeps small groups at your original size 
+                    // Value corresponds to the number of data points in the cluster
+                    stops: [
+                        { value: 2, size: "20px" },   
+                        { value: 10, size: "30px" }, 
+                        { value: 50, size: "40px" },
+                        { value: 100, size: "50px" },
+                        { value: 300, size: "60px"},
+                        { value: 500, size: "70px"}
+                    ]
+                },
+
+                // Dynamic color
+                {
+                    type: "color",
+                    field: "cluster_count",
+                    stops: [
+                        // Low count -> light green, High count -> dark green
+                        { value: 2, color: [100, 200, 100, 0.9] },   
+                        { value: 10, color: [50, 180, 50, 0.9] },   
+                        { value: 50, color: [34, 139, 34, 0.9] },   
+                        { value: 100, color: [0, 120, 0, 0.9] },     
+                        { value: 300, color: [0, 80, 0, 0.9] },     
+                        { value: 500, color: [0, 40, 0, 0.9] }
+                    ]
+                }
+            ]
+        },
+
         labelingInfo: [{
             labelExpressionInfo: { 
                 // Only show the number if it's a sum of 2 or more
@@ -135,10 +176,10 @@ require([
     reactiveUtils.watch(
         () => view.zoom,
         (zoom) => {
-            // Zoom 9 or below (further out): show green llusters
-            if (zoom <= 9) {
+            // Zoom 11 or below (further out): show green llusters
+            if (zoom <= 11) {
                 ontarioLayer.featureReduction = clusterConfig;
-            // Zoom 10 or higher (closer in): show individual blue Points
+            // Zoom 12 or higher (closer in): show individual blue Points
             } else {
                 ontarioLayer.featureReduction = null;
             }
@@ -168,8 +209,8 @@ require([
             if (dataPoint) {
                 view.goTo({
                     // Zoom to level 10 and center slightly above the point for better visibility of the popup
-                    target: [dataPoint.graphic.geometry.longitude, dataPoint.graphic.geometry.latitude + 0.15],
-                    zoom: 10 
+                    target: [dataPoint.graphic.geometry.longitude, dataPoint.graphic.geometry.latitude + 0.05],
+                    zoom: 12 
                 }, {
                     // Smoothly zoom to the data point    
                     duration: 1000,
@@ -203,10 +244,12 @@ require([
                     
                     return results.features
                         .filter(f => {
+                            // Does the query partially match the township, water-body name, or species?
+                            const township = f.attributes.Geographic_Township;
                             const name = f.attributes.Official_Waterbody_Name;
                             const species = f.attributes.Species;
                             // Return true if the pattern exists ANYWHERE in name or species
-                            return pattern.test(name) || pattern.test(species);
+                            return  pattern.test(township) || pattern.test(name) || pattern.test(species);
                         })
                         .map(f => ({
                             key: "name",
