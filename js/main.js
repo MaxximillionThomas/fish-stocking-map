@@ -1,5 +1,5 @@
 /* 
-Project:   Fishing Stock Mapping
+Project:   Fish Stocking Map
 File:      main.js
 Author:    Maxximillion Thomas
 Purpose:   A data-driven GIS application for mapping fish restocking events across Ontario's waterbodies.
